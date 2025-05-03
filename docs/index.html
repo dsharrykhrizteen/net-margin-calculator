@@ -1,170 +1,194 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Net Margin Calculator</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-        th { background: #f4f4f4; }
-        .exceed { color: red; }
-        label { display: inline-block; width: 140px; margin-top: 10px; }
-        input, select { padding: 5px; margin-top: 10px; width: 150px; }
-        button { padding: 8px 16px; margin-top: 20px; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Net Margin Calculator</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    label { display: inline-block; width: 180px; margin-top: 10px; }
+    input, button { padding: 5px; margin-top: 10px; }
+    input[type="text"], input[type="number"], input[type="file"] { width: 160px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #f4f4f4; }
+    #formDiv, #resultTable { display: none; }
+  </style>
+  <!-- SheetJS for Excel parsing -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-    <h1>Order Net Margin Calculator</h1>
-    <div id="form">
-        <label for="sku">SKU:</label>
-        <select id="sku">
-            <option value="">-- Select SKU --</option>
-        </select><br>
+  <h1>Order Net Margin Calculator</h1>
+  
+  <!-- Initial upload screen -->
+  <div id="uploadDiv">
+    <label for="fileInput">Upload SKU Excel File:</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+    <p>File must include columns: <strong>Inventory Number, Supplier Cost, Shipping Fee, Length, Width, Height, Weight</strong>.</p>
+  </div>
 
-        <label for="supplierCost">Supplier Cost:</label>
-        <input type="number" id="supplierCost" step="0.01" readonly><br>
+  <!-- Order entry form -->
+  <div id="formDiv">
+    <button id="clearData">Reset SKU Data</button><br>
+    <label for="skuInput">Inventory Number (SKU):</label>
+    <input type="text" id="skuInput"><br>
 
-        <label for="length">Length (in):</label>
-        <input type="number" id="length" readonly><br>
+    <label for="orderIdInput">Site Order ID:</label>
+    <input type="text" id="orderIdInput"><br>
 
-        <label for="width">Width (in):</label>
-        <input type="number" id="width" readonly><br>
+    <label for="quantityInput">Quantity:</label>
+    <input type="number" id="quantityInput" value="1" min="1"><br>
 
-        <label for="height">Height (in):</label>
-        <input type="number" id="height" readonly><br>
+    <label for="unitPriceInput">Unit Sales Price:</label>
+    <input type="number" id="unitPriceInput" step="0.01"><br>
 
-        <label for="weight">Weight (lb):</label>
-        <input type="number" id="weight" step="0.01" readonly><br>
+    <label for="taxInput">Total Tax Price:</label>
+    <input type="number" id="taxInput" step="0.01"><br>
 
-        <label for="quantity">Quantity:</label>
-        <input type="number" id="quantity" value="1" min="1"><br>
+    <label for="shippingPaidInput">Total Shipping Paid:</label>
+    <input type="number" id="shippingPaidInput" step="0.01"><br>
 
-        <label for="unitPrice">Unit Sales Price:</label>
-        <input type="number" id="unitPrice" step="0.01"><br>
+    <label for="supplierCostInput">Supplier Cost:</label>
+    <input type="number" id="supplierCostInput" step="0.01" readonly><br>
 
-        <label for="tax">Total Tax Price:</label>
-        <input type="number" id="tax" step="0.01"><br>
+    <label for="shippingFeeInput">Shipping Fee:</label>
+    <input type="number" id="shippingFeeInput" step="0.01" readonly><br>
 
-        <label for="shippingPaid">Total Shipping Paid:</label>
-        <input type="number" id="shippingPaid" step="0.01"><br>
+    <label>Dimensions (L×W×H) & Weight:</label>
+    <input type="number" id="lengthInput" readonly placeholder="L"> ×
+    <input type="number" id="widthInput" readonly placeholder="W"> ×
+    <input type="number" id="heightInput" readonly placeholder="H"> &nbsp;
+    <input type="number" id="weightInput" readonly placeholder="Wt"><br>
 
-        <label for="shipFee">ShipStation Shipping Fee:</label>
-        <input type="number" id="shipFee" step="0.01"><br>
+    <button id="addOrderBtn">Add Order</button>
+  </div>
 
-        <button onclick="addOrder()">Add Order</button>
-    </div>
+  <!-- Results table -->
+  <table id="resultTable">
+    <thead>
+      <tr>
+        <th>Site Order ID</th><th>Quantity</th><th>Unit Sales Price</th>
+        <th>Total Tax Price</th><th>Total Shipping Paid</th><th>Sales Order Total</th>
+        <th>Supplier Cost</th><th>Total Supplier Cost</th><th>Shipping Fee</th>
+        <th>Merchant/List Fee</th><th>Total Cost</th><th>Net Profit</th>
+        <th>Net Profit Margin</th><th>Length</th><th>Width</th><th>Height</th><th>Weight</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-    <table id="orderTable">
-        <thead>
-            <tr>
-                <th>Site Order ID</th>
-                <th>Quantity</th>
-                <th>Unit Sales Price</th>
-                <th>Total Tax Price</th>
-                <th>Total Shipping Paid</th>
-                <th>Sales Order Total</th>
-                <th>Supplier Cost</th>
-                <th>Total Supplier Cost</th>
-                <th>ShipStation Shipping Fee</th>
-                <th>Merchant/List Fee</th>
-                <th>Total Cost</th>
-                <th>Net Profit</th>
-                <th>Net Profit Margin</th>
-                <th>Length</th>
-                <th>Width</th>
-                <th>Height</th>
-                <th>Weight</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+  <script>
+    // SKU master data
+    let skuData = {};
 
-    <script>
-    // Sample SKU data; replace with real data or API calls
-    const skuData = {
-        "SKU001": { supplierCost: 10.00, length: 20, width: 15, height: 10, weight: 2 },
-        "SKU002": { supplierCost: 5.50, length: 30, width: 20, height: 5, weight: 1.2 }
-        // Add more SKUs here
-    };
-
-    // Populate SKU dropdown
-    const skuSelect = document.getElementById('sku');
-    Object.keys(skuData).forEach(key => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = key;
-        skuSelect.appendChild(opt);
-    });
-
-    // Auto-fill on SKU change
-    skuSelect.addEventListener('change', () => {
-        const sku = skuSelect.value;
-        if (skuData[sku]) {
-            const { supplierCost, length, width, height, weight } = skuData[sku];
-            document.getElementById('supplierCost').value = supplierCost.toFixed(2);
-            document.getElementById('length').value = length;
-            document.getElementById('width').value = width;
-            document.getElementById('height').value = height;
-            document.getElementById('weight').value = weight;
-        } else {
-            ['supplierCost','length','width','height','weight'].forEach(id => document.getElementById(id).value = '');
-        }
-    });
-
-    let orderCount = 0;
-    function addOrder() {
-        const sku = skuSelect.value;
-        if (!sku || !skuData[sku]) { alert('Please select a valid SKU'); return; }
-
-        const quantity    = parseInt(document.getElementById('quantity').value, 10);
-        const unitPrice   = parseFloat(document.getElementById('unitPrice').value);
-        const tax         = parseFloat(document.getElementById('tax').value);
-        const shippingPaid= parseFloat(document.getElementById('shippingPaid').value);
-        const shipFee     = parseFloat(document.getElementById('shipFee').value);
-        const supplierCost= parseFloat(document.getElementById('supplierCost').value);
-        const length      = parseFloat(document.getElementById('length').value);
-        const width       = parseFloat(document.getElementById('width').value);
-        const height      = parseFloat(document.getElementById('height').value);
-        const weight      = parseFloat(document.getElementById('weight').value);
-
-        // Calculations
-        const salesOrderTotal   = (unitPrice * quantity) + tax + shippingPaid;
-        const totalSupplierCost = supplierCost * quantity;
-        const merchantFee       = salesOrderTotal * 0.15;
-        const totalCost         = totalSupplierCost + shipFee + merchantFee;
-        const netProfit         = salesOrderTotal - totalCost - tax;
-        const netMargin         = salesOrderTotal ? (netProfit / salesOrderTotal) : 0;
-
-        // Girth check
-        const girthClass = ((2 * height) + (2 * width) + length) > 105 ? 'exceed' : '';
-
-        orderCount += 1;
-        const tbody = document.querySelector('#orderTable tbody');
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>ORD-${String(orderCount).padStart(4, '0')}</td>
-            <td>${quantity}</td>
-            <td>${unitPrice.toFixed(2)}</td>
-            <td>${tax.toFixed(2)}</td>
-            <td>${shippingPaid.toFixed(2)}</td>
-            <td>${salesOrderTotal.toFixed(2)}</td>
-            <td>${supplierCost.toFixed(2)}</td>
-            <td>${totalSupplierCost.toFixed(2)}</td>
-            <td>${shipFee.toFixed(2)}</td>
-            <td>${merchantFee.toFixed(2)}</td>
-            <td>${totalCost.toFixed(2)}</td>
-            <td>${netProfit.toFixed(2)}</td>
-            <td>${(netMargin * 100).toFixed(2)}%</td>
-            <td class="${girthClass}">${length}</td>
-            <td class="${girthClass}">${width}</td>
-            <td class="${girthClass}">${height}</td>
-            <td>${weight}</td>
-        `;
-        tbody.appendChild(row);
+    // Load from localStorage on init
+    function init() {
+      const saved = localStorage.getItem('skuData');
+      if (saved) {
+        skuData = JSON.parse(saved);
+        showForm();
+      }
     }
-    </script>
+
+    // Show form & table
+    function showForm() {
+      document.getElementById('uploadDiv').style.display = 'none';
+      document.getElementById('formDiv').style.display = '';
+      document.getElementById('resultTable').style.display = '';
+    }
+
+    // Parse Excel and build skuData map
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        json.forEach(r => {
+          const key = String(r['Inventory Number'] || '').trim();
+          if (!key) return;
+          skuData[key] = {
+            supplierCost: parseFloat(r['Supplier Cost']) || 0,
+            shippingFee:  parseFloat(r['Shipping Fee'])  || 0,
+            length:       parseFloat(r['Length'])       || 0,
+            width:        parseFloat(r['Width'])        || 0,
+            height:       parseFloat(r['Height'])       || 0,
+            weight:       parseFloat(r['Weight'])       || 0
+          };
+        });
+        localStorage.setItem('skuData', JSON.stringify(skuData));
+        alert('SKU master data loaded.');
+        showForm();
+      };
+      reader.readAsBinaryString(file);
+    });
+
+    // Clear loaded data
+    document.getElementById('clearData').addEventListener('click', () => {
+      localStorage.removeItem('skuData');
+      location.reload();
+    });
+
+    // Auto-fill on SKU input
+    function autofillSku() {
+      const rec = skuData[document.getElementById('skuInput').value.trim()] || {};
+      document.getElementById('supplierCostInput').value = rec.supplierCost.toFixed(2);
+      document.getElementById('shippingFeeInput' ).value = rec.shippingFee.toFixed(2);
+      document.getElementById('lengthInput'      ).value = rec.length;
+      document.getElementById('widthInput'       ).value = rec.width;
+      document.getElementById('heightInput'      ).value = rec.height;
+      document.getElementById('weightInput'      ).value = rec.weight;
+    }
+    document.getElementById('skuInput').addEventListener('change', autofillSku);
+    document.getElementById('skuInput').addEventListener('blur',   autofillSku);
+
+    // Add order to table
+    document.getElementById('addOrderBtn').addEventListener('click', () => {
+      const orderId   = document.getElementById('orderIdInput').value.trim();
+      const qty       = parseInt(document.getElementById('quantityInput').value, 10) || 0;
+      const up        = parseFloat(document.getElementById('unitPriceInput').value) || 0;
+      const tax       = parseFloat(document.getElementById('taxInput').value) || 0;
+      const paid      = parseFloat(document.getElementById('shippingPaidInput').value) || 0;
+      const sc        = parseFloat(document.getElementById('supplierCostInput').value) || 0;
+      const sf        = parseFloat(document.getElementById('shippingFeeInput' ).value) || 0;
+      const l         = parseFloat(document.getElementById('lengthInput'      ).value) || 0;
+      const w         = parseFloat(document.getElementById('widthInput'       ).value) || 0;
+      const h         = parseFloat(document.getElementById('heightInput'      ).value) || 0;
+      const wt        = parseFloat(document.getElementById('weightInput'      ).value) || 0;
+
+      const salesTotal  = (up * qty) + tax + paid;
+      const totalSup    = sc * qty;
+      const merchantFee = salesTotal * 0.15;
+      const totalCost   = totalSup + sf + merchantFee;
+      const netProfit   = salesTotal - totalCost - tax;
+      const netMargin   = salesTotal ? (netProfit / salesTotal) : 0;
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${orderId}</td>
+        <td>${qty}</td>
+        <td>${up.toFixed(2)}</td>
+        <td>${tax.toFixed(2)}</td>
+        <td>${paid.toFixed(2)}</td>
+        <td>${salesTotal.toFixed(2)}</td>
+        <td>${sc.toFixed(2)}</td>
+        <td>${totalSup.toFixed(2)}</td>
+        <td>${sf.toFixed(2)}</td>
+        <td>${merchantFee.toFixed(2)}</td>
+        <td>${totalCost.toFixed(2)}</td>
+        <td>${netProfit.toFixed(2)}</td>
+        <td>${(netMargin*100).toFixed(2)}%</td>
+        <td>${l}</td>
+        <td>${w}</td>
+        <td>${h}</td>
+        <td>${wt}</td>
+      `;
+      document.querySelector('#resultTable tbody').appendChild(row);
+    });
+
+    init();
+  </script>
 </body>
 </html>
-
