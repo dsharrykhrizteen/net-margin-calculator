@@ -10,7 +10,7 @@
         th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
         th { background: #f4f4f4; }
         .exceed { color: red; }
-        label { display: inline-block; width: 120px; margin-top: 10px; }
+        label { display: inline-block; width: 140px; margin-top: 10px; }
         input, select { padding: 5px; margin-top: 10px; width: 150px; }
         button { padding: 8px 16px; margin-top: 20px; }
     </style>
@@ -22,6 +22,21 @@
         <select id="sku">
             <option value="">-- Select SKU --</option>
         </select><br>
+
+        <label for="supplierCost">Supplier Cost:</label>
+        <input type="number" id="supplierCost" step="0.01" readonly><br>
+
+        <label for="length">Length (in):</label>
+        <input type="number" id="length" readonly><br>
+
+        <label for="width">Width (in):</label>
+        <input type="number" id="width" readonly><br>
+
+        <label for="height">Height (in):</label>
+        <input type="number" id="height" readonly><br>
+
+        <label for="weight">Weight (lb):</label>
+        <input type="number" id="weight" step="0.01" readonly><br>
 
         <label for="quantity">Quantity:</label>
         <input type="number" id="quantity" value="1" min="1"><br>
@@ -83,18 +98,36 @@
         skuSelect.appendChild(opt);
     });
 
+    // Auto-fill on SKU change
+    skuSelect.addEventListener('change', () => {
+        const sku = skuSelect.value;
+        if (skuData[sku]) {
+            const { supplierCost, length, width, height, weight } = skuData[sku];
+            document.getElementById('supplierCost').value = supplierCost.toFixed(2);
+            document.getElementById('length').value = length;
+            document.getElementById('width').value = width;
+            document.getElementById('height').value = height;
+            document.getElementById('weight').value = weight;
+        } else {
+            ['supplierCost','length','width','height','weight'].forEach(id => document.getElementById(id).value = '');
+        }
+    });
+
     let orderCount = 0;
     function addOrder() {
         const sku = skuSelect.value;
         if (!sku || !skuData[sku]) { alert('Please select a valid SKU'); return; }
 
-        const quantity    = parseInt(document.getElementById('quantity').value);
+        const quantity    = parseInt(document.getElementById('quantity').value, 10);
         const unitPrice   = parseFloat(document.getElementById('unitPrice').value);
         const tax         = parseFloat(document.getElementById('tax').value);
         const shippingPaid= parseFloat(document.getElementById('shippingPaid').value);
         const shipFee     = parseFloat(document.getElementById('shipFee').value);
-
-        const { supplierCost, length, width, height, weight } = skuData[sku];
+        const supplierCost= parseFloat(document.getElementById('supplierCost').value);
+        const length      = parseFloat(document.getElementById('length').value);
+        const width       = parseFloat(document.getElementById('width').value);
+        const height      = parseFloat(document.getElementById('height').value);
+        const weight      = parseFloat(document.getElementById('weight').value);
 
         // Calculations
         const salesOrderTotal   = (unitPrice * quantity) + tax + shippingPaid;
@@ -102,11 +135,10 @@
         const merchantFee       = salesOrderTotal * 0.15;
         const totalCost         = totalSupplierCost + shipFee + merchantFee;
         const netProfit         = salesOrderTotal - totalCost - tax;
-        const netMargin         = (netProfit / salesOrderTotal) || 0;
+        const netMargin         = salesOrderTotal ? (netProfit / salesOrderTotal) : 0;
 
         // Girth check
-        const girth       = (2 * height) + (2 * width) + length;
-        const girthClass  = girth > 105 ? 'exceed' : '';
+        const girthClass = ((2 * height) + (2 * width) + length) > 105 ? 'exceed' : '';
 
         orderCount += 1;
         const tbody = document.querySelector('#orderTable tbody');
@@ -135,3 +167,4 @@
     </script>
 </body>
 </html>
+
