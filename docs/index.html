@@ -9,183 +9,73 @@
     label { display: inline-block; width: 180px; margin-top: 10px; }
     input, button { padding: 5px; margin-top: 10px; }
     input[type="text"], input[type="number"], input[type="file"] { width: 160px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #f4f4f4; }
-    #formDiv, #resultTable { display: none; }
+    #formDiv { display: none; margin-top: 20px; }
   </style>
   <!-- SheetJS for Excel parsing -->
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <h1>Order Net Margin Calculator</h1>
-  
-  <!-- Initial upload screen -->
+  <h1>Net Margin Calculator: Seller Cost Lookup</h1>
+
+  <!-- Upload section -->
   <div id="uploadDiv">
-    <label for="fileInput">Upload SKU Excel File:</label>
-    <input type="file" id="fileInput" accept=".xlsx,.xls">
-    <p>File must include columns: <strong>Inventory Number, Supplier Cost, Shipping Fee, Length, Width, Height, Weight</strong>.</p>
+    <label for="fileInput">Upload Excel File:</label>
+    <input type="file" id="fileInput" accept=".xlsx,.xls"><br>
+    <small>Required columns: <strong>Inventory Number, Length, Width, Height, Weight, Seller Cost, Classification, Supplier Code</strong>.</small>
   </div>
 
-  <!-- Order entry form -->
+  <!-- Lookup form -->
   <div id="formDiv">
-    <button id="clearData">Reset SKU Data</button><br>
-    <label for="skuInput">Inventory Number (SKU):</label>
-    <input type="text" id="skuInput"><br>
+    <label for="skuInput">Enter Inventory Number (SKU):</label>
+    <input type="text" id="skuInput" placeholder="e.g. SKU001"><br>
 
-    <label for="orderIdInput">Site Order ID:</label>
-    <input type="text" id="orderIdInput"><br>
-
-    <label for="quantityInput">Quantity:</label>
-    <input type="number" id="quantityInput" value="1" min="1"><br>
-
-    <label for="unitPriceInput">Unit Sales Price:</label>
-    <input type="number" id="unitPriceInput" step="0.01"><br>
-
-    <label for="taxInput">Total Tax Price:</label>
-    <input type="number" id="taxInput" step="0.01"><br>
-
-    <label for="shippingPaidInput">Total Shipping Paid:</label>
-    <input type="number" id="shippingPaidInput" step="0.01"><br>
-
-    <label for="supplierCostInput">Supplier Cost:</label>
-    <input type="number" id="supplierCostInput" step="0.01" readonly><br>
-
-    <label for="shippingFeeInput">Shipping Fee:</label>
-    <input type="number" id="shippingFeeInput" step="0.01" readonly><br>
-
-    <label>Dimensions (L×W×H) & Weight:</label>
-    <input type="number" id="lengthInput" readonly placeholder="L"> ×
-    <input type="number" id="widthInput" readonly placeholder="W"> ×
-    <input type="number" id="heightInput" readonly placeholder="H"> &nbsp;
-    <input type="number" id="weightInput" readonly placeholder="Wt"><br>
-
-    <button id="addOrderBtn">Add Order</button>
+    <label for="sellerCostInput">Seller Cost:</label>
+    <input type="number" id="sellerCostInput" step="0.01" readonly><br>
   </div>
-
-  <!-- Results table -->
-  <table id="resultTable">
-    <thead>
-      <tr>
-        <th>Site Order ID</th><th>Quantity</th><th>Unit Sales Price</th>
-        <th>Total Tax Price</th><th>Total Shipping Paid</th><th>Sales Order Total</th>
-        <th>Supplier Cost</th><th>Total Supplier Cost</th><th>Shipping Fee</th>
-        <th>Merchant/List Fee</th><th>Total Cost</th><th>Net Profit</th>
-        <th>Net Profit Margin</th><th>Length</th><th>Width</th><th>Height</th><th>Weight</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
 
   <script>
-    // SKU master data
     let skuData = {};
 
-    // Load from localStorage on init
+    // Initialize from localStorage
     function init() {
       const saved = localStorage.getItem('skuData');
       if (saved) {
         skuData = JSON.parse(saved);
-        showForm();
+        document.getElementById('uploadDiv').style.display = 'none';
+        document.getElementById('formDiv').style.display = 'block';
       }
     }
 
-    // Show form & table
-    function showForm() {
-      document.getElementById('uploadDiv').style.display = 'none';
-      document.getElementById('formDiv').style.display = '';
-      document.getElementById('resultTable').style.display = '';
-    }
-
-    // Parse Excel and build skuData map
-    document.getElementById('fileInput').addEventListener('change', e => {
+    // Parse Excel file on upload
+    document.getElementById('fileInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = evt => {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+      reader.onload = function(evt) {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        json.forEach(r => {
-          const key = String(r['Inventory Number'] || '').trim();
+        skuData = {};
+        json.forEach(row => {
+          const key = String(row['Inventory Number'] || '').trim();
           if (!key) return;
-          skuData[key] = {
-            supplierCost: parseFloat(r['Supplier Cost']) || 0,
-            shippingFee:  parseFloat(r['Shipping Fee'])  || 0,
-            length:       parseFloat(r['Length'])       || 0,
-            width:        parseFloat(r['Width'])        || 0,
-            height:       parseFloat(r['Height'])       || 0,
-            weight:       parseFloat(r['Weight'])       || 0
-          };
+          // Map seller cost
+          skuData[key] = parseFloat(row['Seller Cost']) || 0;
         });
         localStorage.setItem('skuData', JSON.stringify(skuData));
-        alert('SKU master data loaded.');
-        showForm();
+        alert('Seller cost data loaded successfully.');
+        document.getElementById('uploadDiv').style.display = 'none';
+        document.getElementById('formDiv').style.display = 'block';
       };
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     });
 
-    // Clear loaded data
-    document.getElementById('clearData').addEventListener('click', () => {
-      localStorage.removeItem('skuData');
-      location.reload();
-    });
-
-    // Auto-fill on SKU input
-    function autofillSku() {
-      const rec = skuData[document.getElementById('skuInput').value.trim()] || {};
-      document.getElementById('supplierCostInput').value = rec.supplierCost.toFixed(2);
-      document.getElementById('shippingFeeInput' ).value = rec.shippingFee.toFixed(2);
-      document.getElementById('lengthInput'      ).value = rec.length;
-      document.getElementById('widthInput'       ).value = rec.width;
-      document.getElementById('heightInput'      ).value = rec.height;
-      document.getElementById('weightInput'      ).value = rec.weight;
-    }
-    document.getElementById('skuInput').addEventListener('change', autofillSku);
-    document.getElementById('skuInput').addEventListener('blur',   autofillSku);
-
-    // Add order to table
-    document.getElementById('addOrderBtn').addEventListener('click', () => {
-      const orderId   = document.getElementById('orderIdInput').value.trim();
-      const qty       = parseInt(document.getElementById('quantityInput').value, 10) || 0;
-      const up        = parseFloat(document.getElementById('unitPriceInput').value) || 0;
-      const tax       = parseFloat(document.getElementById('taxInput').value) || 0;
-      const paid      = parseFloat(document.getElementById('shippingPaidInput').value) || 0;
-      const sc        = parseFloat(document.getElementById('supplierCostInput').value) || 0;
-      const sf        = parseFloat(document.getElementById('shippingFeeInput' ).value) || 0;
-      const l         = parseFloat(document.getElementById('lengthInput'      ).value) || 0;
-      const w         = parseFloat(document.getElementById('widthInput'       ).value) || 0;
-      const h         = parseFloat(document.getElementById('heightInput'      ).value) || 0;
-      const wt        = parseFloat(document.getElementById('weightInput'      ).value) || 0;
-
-      const salesTotal  = (up * qty) + tax + paid;
-      const totalSup    = sc * qty;
-      const merchantFee = salesTotal * 0.15;
-      const totalCost   = totalSup + sf + merchantFee;
-      const netProfit   = salesTotal - totalCost - tax;
-      const netMargin   = salesTotal ? (netProfit / salesTotal) : 0;
-
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${orderId}</td>
-        <td>${qty}</td>
-        <td>${up.toFixed(2)}</td>
-        <td>${tax.toFixed(2)}</td>
-        <td>${paid.toFixed(2)}</td>
-        <td>${salesTotal.toFixed(2)}</td>
-        <td>${sc.toFixed(2)}</td>
-        <td>${totalSup.toFixed(2)}</td>
-        <td>${sf.toFixed(2)}</td>
-        <td>${merchantFee.toFixed(2)}</td>
-        <td>${totalCost.toFixed(2)}</td>
-        <td>${netProfit.toFixed(2)}</td>
-        <td>${(netMargin*100).toFixed(2)}%</td>
-        <td>${l}</td>
-        <td>${w}</td>
-        <td>${h}</td>
-        <td>${wt}</td>
-      `;
-      document.querySelector('#resultTable tbody').appendChild(row);
+    // Auto-fill seller cost on SKU input
+    document.getElementById('skuInput').addEventListener('change', function() {
+      const sku = this.value.trim();
+      const cost = skuData[sku];
+      document.getElementById('sellerCostInput').value = (cost !== undefined) ? cost.toFixed(2) : '';
     });
 
     init();
