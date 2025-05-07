@@ -1,84 +1,226 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Net Margin Calculator</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    label { display: inline-block; width: 180px; margin-top: 10px; }
-    input, button { padding: 5px; margin-top: 10px; }
-    input[type="text"], input[type="number"], input[type="file"] { width: 160px; }
-    #formDiv { display: none; margin-top: 20px; }
-  </style>
-  <!-- SheetJS for Excel parsing -->
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Net Margin Calculator</title>
+<style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
+    th { background: #f0f0f0; }
+    button { padding: 0.5rem 1rem; margin: 0.5rem; cursor: pointer; }
+    input[type="number"] { width: 80px; }
+    input[type="text"] { width: 100px; }
+    .computed { font-weight: bold; }
+    .over-limit { color: red; }
+    #fileInput { margin-bottom: 1rem; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 </head>
 <body>
-  <h1>Net Margin Calculator: Seller Cost Lookup</h1>
-
-  <!-- Upload section -->
-  <div id="uploadDiv">
-    <label for="fileInput">Upload Excel File:</label>
-    <input type="file" id="fileInput" accept=".xlsx,.xls"><br>
-    <small>Required columns: <strong>Inventory Number, Length, Width, Height, Weight, Seller Cost, Classification, Supplier Code</strong>.</small>
-  </div>
-
-  <!-- Lookup form -->
-  <div id="formDiv">
-    <label for="skuInput">Enter Inventory Number (SKU):</label>
-    <input type="text" id="skuInput" placeholder="e.g. SKU001"><br>
-
-    <label for="sellerCostInput">Seller Cost:</label>
-    <input type="number" id="sellerCostInput" step="0.01" readonly><br>
-  </div>
-
+<h1>Net Margin Calculator</h1>
+<label for="fileInput">Upload Inventory Excel File:</label>
+<input type="file" id="fileInput" accept=".xlsx, .xls" />
+ 
+  <table id="itemsTable">
+<thead>
+<tr>
+<th>Site Order ID</th>
+<th>Quantity</th>
+<th>Unit Sales Price</th>
+<th>Total Tax Price</th>
+<th>Total Shipping Paid</th>
+<th>Sales Order Total</th>
+<th>Supplier Cost</th>
+<th>Total Supplier Cost</th>
+<th>ShipStation Shipping Fee</th>
+<th>Merchant/List Fee</th>
+<th>Total Cost</th>
+<th>Net Profit</th>
+<th>Net Profit Margin</th>
+<th>SKU</th>
+<th>Length</th>
+<th>Width</th>
+<th>Height</th>
+<th>Weight</th>
+<th>Girth</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+ 
+  <button id="addItemBtn">Add Item</button>
+<button id="calculateBtn">Calculate Net Margin</button>
+<button id="filterShippingBtn">Highlight Expensive Shipping (>$20)</button>
+ 
   <script>
-    let skuData = {};
-
-    // Initialize from localStorage
-    function init() {
-      const saved = localStorage.getItem('skuData');
-      if (saved) {
-        skuData = JSON.parse(saved);
-        document.getElementById('uploadDiv').style.display = 'none';
-        document.getElementById('formDiv').style.display = 'block';
-      }
-    }
-
-    // Parse Excel file on upload
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const data = new Uint8Array(evt.target.result);
-        const wb = XLSX.read(data, { type: 'array' });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        skuData = {};
-        json.forEach(row => {
-          const key = String(row['Inventory Number'] || '').trim();
-          if (!key) return;
-          // Map seller cost
-          skuData[key] = parseFloat(row['Seller Cost']) || 0;
+    document.addEventListener('DOMContentLoaded', () => {
+      let inventoryData = {};
+      const fileInput = document.getElementById('fileInput');
+      const tbody = document.querySelector('#itemsTable tbody');
+ 
+      function addItem() {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+<td><input type="text" class="orderIdInput" placeholder="Order ID"></td>
+<td><input type="number" class="quantity" placeholder="0" step="1"></td>
+<td><input type="number" class="unitSalesPrice" placeholder="0.00" step="0.01"></td>
+<td><input type="number" class="totalTaxPrice" placeholder="0.00" step="0.01"></td>
+<td><input type="number" class="totalShippingPaid" placeholder="0.00" step="0.01"></td>
+<td><span class="salesOrderTotal computed">0.00</span></td>
+<td><input type="number" class="supplierCost" placeholder="0.00" step="0.01"></td>
+<td><span class="totalSupplierCost computed">0.00</span></td>
+<td><input type="number" class="shipStationFee" placeholder="0.00" step="0.01"></td>
+<td><span class="merchantFee computed">0.00</span></td>
+<td><span class="totalCost computed">0.00</span></td>
+<td><span class="netProfit computed">0.00</span></td>
+<td><span class="netMargin computed">0.00%</span></td>
+<td><input type="text" class="sku" placeholder="SKU"></td>
+<td><input type="number" class="length" placeholder="0" step="0.01"></td>
+<td><input type="number" class="width" placeholder="0" step="0.01"></td>
+<td><input type="number" class="height" placeholder="0" step="0.01"></td>
+<td><input type="number" class="weight" placeholder="0" step="0.01"></td>
+<td><span class="girth computed">0.00</span></td>
+<td><button class="deleteBtn">Delete</button></td>
+        `;
+ 
+        // Event: Delete row and recheck duplicates
+        row.querySelector('.deleteBtn').addEventListener('click', () => {
+          row.remove();
+          checkDuplicateOrderIDs();
         });
-        localStorage.setItem('skuData', JSON.stringify(skuData));
-        alert('Seller cost data loaded successfully.');
-        document.getElementById('uploadDiv').style.display = 'none';
-        document.getElementById('formDiv').style.display = 'block';
-      };
-      reader.readAsArrayBuffer(file);
+ 
+        // Event: Auto-fill SKU details
+        const skuInput = row.querySelector('.sku');
+        skuInput.addEventListener('input', fillFromSKU);
+        skuInput.addEventListener('change', fillFromSKU);
+ 
+        function fillFromSKU() {
+          const key = skuInput.value.trim();
+          if (inventoryData[key]) {
+            const data = inventoryData[key];
+            row.querySelector('.supplierCost').value = data.supplierCost.toFixed(2);
+            row.querySelector('.length').value       = data.length;
+            row.querySelector('.width').value        = data.width;
+            row.querySelector('.height').value       = data.height;
+            row.querySelector('.weight').value       = data.weight;
+          }
+        }
+ 
+        // Event: Check for duplicate Site Order ID
+        const orderIDInput = row.querySelector('.orderIdInput');
+        orderIDInput.addEventListener('input', checkDuplicateOrderIDs);
+        orderIDInput.addEventListener('change', checkDuplicateOrderIDs);
+ 
+        tbody.appendChild(row);
+      }
+ 
+      function calculateNetMargin() {
+        document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
+          const qty          = +row.querySelector('.quantity').value       || 0;
+          const unitPrice    = +row.querySelector('.unitSalesPrice').value  || 0;
+          const tax          = +row.querySelector('.totalTaxPrice').value   || 0;
+          const shippingPaid = +row.querySelector('.totalShippingPaid').value || 0;
+ 
+          const salesTotal = unitPrice * qty + tax + shippingPaid;
+          row.querySelector('.salesOrderTotal').textContent = salesTotal.toFixed(2);
+ 
+          const supplierCost      = +row.querySelector('.supplierCost').value || 0;
+          const totalSupplierCost = supplierCost * qty;
+          row.querySelector('.totalSupplierCost').textContent = totalSupplierCost.toFixed(2);
+ 
+          const merchantFee = salesTotal * 0.15;
+          row.querySelector('.merchantFee').textContent = merchantFee.toFixed(2);
+ 
+          const shipFee   = +row.querySelector('.shipStationFee').value || 0;
+          const totalCost = totalSupplierCost + shipFee + merchantFee;
+          row.querySelector('.totalCost').textContent = totalCost.toFixed(2);
+ 
+          const netProfit = salesTotal - totalCost - tax;
+          row.querySelector('.netProfit').textContent = netProfit.toFixed(2);
+ 
+          const netMargin = salesTotal !== 0 ? netProfit / salesTotal : 0;
+          row.querySelector('.netMargin').textContent = (netMargin * 100).toFixed(2) + '%';
+ 
+          const height    = +row.querySelector('.height').value || 0;
+          const width     = +row.querySelector('.width').value  || 0;
+          const length    = +row.querySelector('.length').value || 0;
+          const girthValue = 2 * height + 2 * width + length;
+          const girthEl   = row.querySelector('.girth');
+          girthEl.textContent = girthValue.toFixed(2);
+          girthEl.classList.toggle('over-limit', girthValue > 105);
+        });
+      }
+ 
+      function highlightHighShipping() {
+        document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
+          const shipFee = +row.querySelector('.shipStationFee').value || 0;
+          row.style.backgroundColor = shipFee > 20 ? '#ffe5e5' : '';
+        });
+      }
+ 
+      function checkDuplicateOrderIDs() {
+        const seen = {};
+        document.querySelectorAll('#itemsTable tbody tr').forEach(row => {
+          const input = row.querySelector('.orderIdInput');
+          const val = input.value.trim();
+          if (!val) {
+            input.style.backgroundColor = '';
+            return;
+          }
+          if (seen[val]) {
+            input.style.backgroundColor = 'yellow';
+            seen[val].style.backgroundColor = 'yellow';
+          } else {
+            input.style.backgroundColor = '';
+            seen[val] = input;
+          }
+        });
+      }
+ 
+      fileInput.addEventListener('change', e => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = evt => {
+          try {
+            const data     = new Uint8Array(evt.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+            const json     = XLSX.utils.sheet_to_json(sheet);
+            const skuField      = json[0] && 'Inventory Number' in json[0] ? 'Inventory Number' : 'SKU';
+            const supplierField = json[0] && 'Seller Cost' in json[0]       ? 'Seller Cost'       : 'SupplierCost';
+            inventoryData = {};
+            json.forEach(r => {
+              const key = r[skuField];
+              if (key != null) {
+                inventoryData[key] = {
+                  supplierCost: +r[supplierField] || 0,
+                  length:       +r.Length        || 0,
+                  width:        +r.Width         || 0,
+                  height:       +r.Height        || 0,
+                  weight:       +r.Weight        || 0
+                };
+              }
+            });
+            alert(`Loaded ${Object.keys(inventoryData).length} SKUs (using '${skuField}', costs from '${supplierField}')`);
+            if (!tbody.children.length) addItem();
+          } catch (err) {
+            console.error(err);
+            alert('Failed to parse Excel file');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+ 
+      document.getElementById('addItemBtn').addEventListener('click', addItem);
+      document.getElementById('calculateBtn').addEventListener('click', calculateNetMargin);
+      document.getElementById('filterShippingBtn').addEventListener('click', highlightHighShipping);
+ 
+      addItem();
+      checkDuplicateOrderIDs(); // Initial duplicate check
     });
-
-    // Auto-fill seller cost on SKU input
-    document.getElementById('skuInput').addEventListener('change', function() {
-      const sku = this.value.trim();
-      const cost = skuData[sku];
-      document.getElementById('sellerCostInput').value = (cost !== undefined) ? cost.toFixed(2) : '';
-    });
-
-    init();
-  </script>
+</script>
 </body>
 </html>
